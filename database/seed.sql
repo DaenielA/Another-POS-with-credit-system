@@ -2,11 +2,11 @@ USE pos_system;
 
 -- Admin user (password: admin123)
 INSERT INTO users (name, email, password, role_id) VALUES
-('Admin User', 'admin@pos.com', '$2b$10$8/Qs.twZmOpvisGtsu1JEeh8CrVSLVHgNuJh5vr4yrO.H1HmMVYnK', 1);
+('Admin User', 'admin@pos.com', '$2b$10$tEJuRwZOUPT4rdpJqLpHIOziICq8lbDLD.lXsOed3Ubu.CboUBIUK', 1);
 
 -- Cashier user (password: cashier123)
 INSERT INTO users (name, email, password, role_id) VALUES
-('Maria Santos', 'cashier@pos.com', '$2b$10$m5Mk/S3RzlpeT6uS4sBFguBRGW5b4v/ymDZ9OGeWvxUH5L5qhU.RC', 2);
+('Maria Santos', 'cashier@pos.com', '$2b$10$bDfp5Ks5XEXhXw1xpw9/ze0KQhx1HiV6b/hnsFeQZsY8m0LJGv88e', 2);
 
 -- Categories
 INSERT INTO categories (name, description) VALUES

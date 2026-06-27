@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import api from '../api/axios';
-import { ArrowLeft, CreditCard, Send } from 'lucide-react';
+import { ArrowLeft, CreditCard, Send, KeyRound } from 'lucide-react';
 
 function CreditScoreBadge({ score }) {
   const s = parseFloat(score);
@@ -25,9 +25,12 @@ export default function MemberDetail() {
   const [showLimitForm, setShowLimitForm] = useState(false);
   const [limitLoading, setLimitLoading] = useState(false);
   const [limitMsg, setLimitMsg] = useState('');
+  const [pinMsg, setPinMsg] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
 
   const { register, handleSubmit, watch, reset, setValue, formState: { errors } } = useForm({ defaultValues: { payment_mode: 'daily', amount_paid: '', payment_date: new Date().toISOString().slice(0, 10), notes: '' } });
   const { register: rlReg, handleSubmit: rlSubmit, formState: { errors: rlErrors } } = useForm();
+  const { register: pinReg, handleSubmit: pinSubmit, reset: pinReset } = useForm();
 
   const paymentMode = watch('payment_mode');
 
@@ -93,6 +96,20 @@ export default function MemberDetail() {
       setLimitMsg(e.response?.data?.message || 'Failed');
     } finally {
       setLimitLoading(false);
+    }
+  };
+
+  const onSetPin = async (data) => {
+    setPinLoading(true);
+    setPinMsg('');
+    try {
+      await api.post(`/members/${id}/set-pin`, { pin: data.pin });
+      setPinMsg('PIN set successfully!');
+      pinReset();
+    } catch (e) {
+      setPinMsg(e.response?.data?.message || 'Failed to set PIN');
+    } finally {
+      setPinLoading(false);
     }
   };
 
@@ -171,6 +188,20 @@ export default function MemberDetail() {
               <Send size={14} /> {payLoading ? 'Processing...' : 'Submit Payment'}
             </button>
           </form>
+
+          {/* Set Member PIN */}
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium mb-2 flex items-center gap-2"><KeyRound size={14} className="text-gray-400" /> Member Portal PIN</p>
+            {pinMsg && <p className={`text-xs p-2 rounded mb-2 ${pinMsg.includes('success') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>{pinMsg}</p>}
+            <form onSubmit={pinSubmit(onSetPin)} className="flex gap-2">
+              <input type="password" className="input text-sm flex-1" placeholder="Set 4-8 digit PIN"
+                {...pinReg('pin', { required: true, minLength: 4, maxLength: 8 })} />
+              <button type="submit" disabled={pinLoading} className="btn-secondary text-sm px-3">
+                {pinLoading ? '...' : 'Set PIN'}
+              </button>
+            </form>
+            <p className="text-xs text-gray-400 mt-1">Member uses phone + PIN to log in at /member-login</p>
+          </div>
 
           {/* Credit Limit Request */}
           <div className="border-t pt-4">

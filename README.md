@@ -3,18 +3,27 @@
 A full-stack Point-of-Sale system for Filipino sari-sari stores and carinderia.
 
 ## Tech Stack
-- **Frontend**: React 18 + Vite, Tailwind CSS, React Router v6, Recharts, React Hook Form, Lucide React
+- **Frontend**: React 19 + Vite, Tailwind CSS, React Router v7, Recharts, React Hook Form, Lucide React
 - **Backend**: Node.js + Express.js, JWT auth, bcrypt, Multer, MySQL2
 - **Database**: MySQL 8.0
 
 ## Project Structure
 ```
-pos-system/
-├── client/        ← React frontend (Vite)
-├── server/        ← Express backend
+Another POS/
+├── client/                  ← React 19 frontend (Vite)
+│   └── src/
+│       ├── api/axios.js     ← Centralized Axios instance (JWT injected here)
+│       ├── components/      ← Shared UI (Layout)
+│       ├── context/         ← AuthContext — global auth state
+│       └── pages/           ← One file per page/feature
+├── server/                  ← Express backend
+│   ├── config/db.js         ← MySQL2 connection pool
+│   ├── middleware/auth.js   ← JWT verify + requireAdmin guard
+│   ├── routes/              ← One file per domain resource
+│   └── utils/               ← Pure helpers (creditScore, txnCode)
 ├── database/
-│   ├── migrations.sql   ← All table definitions
-│   └── seed.sql         ← Sample data
+│   ├── migrations.sql       ← All table definitions
+│   └── seed.sql             ← Sample data
 └── .env.example
 ```
 
@@ -55,20 +64,70 @@ API runs at: http://localhost:5000
 > **Important**: Change passwords after first login in Settings.
 
 ## Features
-- **POS**: Product search with debounce, cart management, cash/credit payments, receipt print
-- **Inventory**: Stock tracking per unit type (piece/pack/wholesale), restock logging, low-stock alerts
-- **Members**: Credit scoring system (0–150), credit limit management, ledger history
-- **Credit**: 4 payment modes (daily/monthly/bulk/full), automatic score adjustment
-- **Reports**: Daily, monthly, top products, by cashier, credit status with charts
-- **Settings**: Staff account management, product categories (admin only)
+
+### POS / Sales
+- Product search with 300ms debounce
+- Per-product unit selection (piece / pack / wholesale) directly on the search results — no mode switching needed
+- Cart management: add, update quantity, remove, clear all
+- Discount field per transaction
+- Cash payment with change computation
+- Credit payment (member required; validates credit score and available limit)
+- Receipt modal with print support
+- Auto-generated transaction codes in `TXN-YYYYMMDD-XXXXXX` format
+
+### Inventory
+- Stock tracking per unit type (piece / pack / wholesale)
+- Restock logging with history
+- Low-stock threshold alerts
+- Product image uploads via Multer
+
+### Members & Credit
+- Credit scoring system (0–150 points)
+- Credit limit management per member
+- 4 payment modes: daily, monthly, bulk, full
+- Automatic score adjustment on payment behavior
+- Ledger history per member
+- Credit limit upgrade request workflow:
+  - Members submit a request with desired limit and reason
+  - Score ≥ 101 → **auto-approved**; score < 60 → **auto-rejected**; otherwise → **pending admin review**
+  - Admin approves or rejects from the Credit Requests page
+
+### Reports
+- Daily and monthly sales summaries
+- Top products by revenue/quantity
+- Sales breakdown by cashier
+- Credit status overview
+- Charts via Recharts
+
+### Settings *(Admin only)*
+- Staff account creation and management
+- Product category management
+- Password changes
+
+## Role-Based Access Control
+
+| Page / Route      | Admin | Cashier |
+|-------------------|-------|---------|
+| Dashboard         | ✅    | ✅      |
+| POS               | ✅    | ✅      |
+| Inventory         | ✅    | ✅      |
+| Members           | ✅    | ✅      |
+| Member Detail     | ✅    | ✅      |
+| Reports           | ✅    | ✅      |
+| Credit Requests   | ✅    | ❌      |
+| Settings          | ✅    | ❌      |
+
+Access is enforced on **both** layers:
+- **Frontend**: `ProtectedRoute` with `adminOnly` prop in `App.jsx`
+- **Backend**: `requireAdmin` middleware in `server/middleware/auth.js`
 
 ## Credit Score Rules
-| Score     | Status    | Credit Allowance          |
-|-----------|-----------|---------------------------|
-| < 60      | Blocked   | No credit purchases       |
-| 61 – 80   | Limited   | 50% of credit limit       |
-| 81 – 100  | Good      | Full credit limit         |
-| 101 – 150 | Excellent | Eligible for limit increase|
+| Score     | Status    | Credit Allowance            | Limit Request        |
+|-----------|-----------|------------------------------|----------------------|
+| < 60      | Blocked   | No credit purchases          | Auto-rejected        |
+| 61 – 80   | Limited   | 50% of credit limit          | Pending admin review |
+| 81 – 100  | Good      | Full credit limit             | Pending admin review |
+| 101 – 150 | Excellent | Full credit limit             | Auto-approved        |
 
 ## Environment Variables (server/.env)
 ```
@@ -80,4 +139,21 @@ DB_NAME=pos_system
 JWT_SECRET=change_this_to_something_secure
 JWT_EXPIRES_IN=8h
 UPLOAD_PATH=./uploads
+CLIENT_URL=http://localhost:5173
 ```
+
+> In production, set `CLIENT_URL` to your frontend domain (e.g. `https://yourdomain.com`) and set `VITE_API_URL` in `client/.env` to your API domain.
+
+## Screenshots
+
+> Add screenshots here after running the app. Suggested pages to capture:
+> - `/pos` — POS terminal with product unit selection and cart
+> - `/inventory` — Stock table with low-stock badges
+> - `/members` — Member list with credit scores
+> - `/credit-requests` — Admin approval workflow
+> - `/reports` — Charts and summary tables
+
+<!-- Example:
+![POS Terminal](docs/screenshots/pos.png)
+![Credit Requests](docs/screenshots/credit-requests.png)
+-->

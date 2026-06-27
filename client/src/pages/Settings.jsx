@@ -66,45 +66,16 @@ function AddUserModal({ onClose, onDone }) {
 export default function Settings() {
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [showAddUser, setShowAddUser] = useState(false);
-  const [newCat, setNewCat] = useState('');
-  const [catLoading, setCatLoading] = useState(false);
 
   const loadUsers = () => api.get('/users').then(r => setUsers(r.data.data)).catch(console.error);
-  const loadCats = () => api.get('/products/categories/all').then(r => setCategories(r.data.data)).catch(console.error);
 
-  useEffect(() => { loadUsers(); loadCats(); }, []);
+  useEffect(() => { loadUsers(); }, []);
 
   const deactivateUser = async (id) => {
     if (!window.confirm('Deactivate this account?')) return;
     await api.delete(`/users/${id}`);
     loadUsers();
-  };
-
-  const addCategory = async (e) => {
-    e.preventDefault();
-    if (!newCat.trim()) return;
-    setCatLoading(true);
-    try {
-      await api.post('/products/categories', { name: newCat.trim() });
-      setNewCat('');
-      loadCats();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed');
-    } finally {
-      setCatLoading(false);
-    }
-  };
-
-  const deleteCategory = async (id) => {
-    if (!window.confirm('Delete this category?')) return;
-    try {
-      await api.delete(`/products/categories/${id}`);
-      loadCats();
-    } catch (e) {
-      alert(e.response?.data?.message || 'Failed');
-    }
   };
 
   if (!isAdmin) return <div className="text-center py-20 text-gray-400">Admin access required</div>;
@@ -140,27 +111,6 @@ export default function Settings() {
                   </button>
                 )}
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Categories */}
-      <div className="card">
-        <h2 className="font-semibold mb-4">Product Categories</h2>
-        <form onSubmit={addCategory} className="flex gap-2 mb-4">
-          <input className="input flex-1" placeholder="New category name..." value={newCat} onChange={e => setNewCat(e.target.value)} />
-          <button type="submit" disabled={catLoading || !newCat.trim()} className="btn-primary whitespace-nowrap">
-            {catLoading ? '...' : 'Add'}
-          </button>
-        </form>
-        <div className="space-y-2">
-          {categories.map(c => (
-            <div key={c.id} className="flex items-center justify-between py-2 border-b last:border-0">
-              <span className="text-sm font-medium">{c.name}</span>
-              <button onClick={() => deleteCategory(c.id)} className="text-red-400 hover:text-red-600 p-1">
-                <Trash2 size={14} />
-              </button>
             </div>
           ))}
         </div>

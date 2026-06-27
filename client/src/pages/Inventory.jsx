@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import api from '../api/axios';
-import { Plus, RefreshCw, X, AlertTriangle, Package, Pencil } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Plus, RefreshCw, X, AlertTriangle, Package, Pencil, Trash2 } from 'lucide-react';
 
 function StockBadge({ qty, threshold }) {
   if (qty <= 0) return <span className="badge bg-red-100 text-red-700">Out of Stock</span>;
@@ -9,15 +10,19 @@ function StockBadge({ qty, threshold }) {
   return <span className="badge bg-green-100 text-green-700">OK</span>;
 }
 
-function RestockModal({ unit, productName, onClose, onDone }) {
-  const { register, handleSubmit, formState: { errors } } = useForm();
+function RestockModal({ unit, productName, parentUnit, onClose, onDone }) {
+  const { register, handleSubmit, watch, formState: { errors } } = useForm();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+
+  const quantity = parseFloat(watch('quantity')) || 0;
+  const piecesPerUnit = parseFloat(unit.pieces_per_unit) || 1;
+  const packsToOpen = parentUnit ? Math.ceil(quantity / piecesPerUnit) : 0;
 
   const onSubmit = async ({ quantity, notes }) => {
     setLoading(true);
     try {
-      await api.post('/inventory/restock', { product_unit_id: unit.id, quantity: parseFloat(quantity), notes });
+      await api.post('/inventory', { product_unit_id: unit.id, quantity: parseFloat(quantity), notes });
       onDone();
       onClose();
     } catch (e) {
@@ -35,10 +40,28 @@ function RestockModal({ unit, productName, onClose, onDone }) {
           <button onClick={onClose}><X size={20} /></button>
         </div>
         <p className="text-sm text-gray-500 mb-4">Current stock: <strong>{unit.stock_quantity}</strong></p>
+        {parentUnit && (
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 text-xs space-y-1">
+            <p className="font-medium text-blue-700">Pack breakdown</p>
+            <div className="flex justify-between text-gray-600">
+              <span>1 {parentUnit.unit_label} = {piecesPerUnit} {unit.unit_label}</span>
+              <span>{parentUnit.unit_label} stock: <strong>{parentUnit.stock_quantity}</strong></span>
+            </div>
+            {quantity > 0 && (
+              <div className="flex justify-between text-blue-700 font-medium border-t border-blue-100 pt-1 mt-1">
+                <span>Packs to open</span>
+                <span>{packsToOpen} {parentUnit.unit_label} → +{quantity} {unit.unit_label}</span>
+              </div>
+            )}
+            {quantity > 0 && packsToOpen > parseFloat(parentUnit.stock_quantity) && (
+              <p className="text-red-500 font-medium">Not enough {parentUnit.unit_label} in stock!</p>
+            )}
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
           {err && <p className="text-red-500 text-sm">{err}</p>}
           <div>
-            <label className="label">Quantity to Add</label>
+            <label className="label">Quantity to Add ({unit.unit_label})</label>
             <input type="number" step="0.001" min="0.001" className="input"
               {...register('quantity', { required: 'Required', min: { value: 0.001, message: 'Must be > 0' } })} />
             {errors.quantity && <p className="text-red-500 text-xs mt-1">{errors.quantity.message}</p>}
@@ -57,11 +80,40 @@ function RestockModal({ unit, productName, onClose, onDone }) {
   );
 }
 
-function AddProductModal({ categories, onClose, onDone }) {
+function AddProductModal({ categories: initialCategories, onClose, onDone }) {
   const { register, handleSubmit, watch, formState: { errors } } = useForm({ defaultValues: { units: [{ unit_label: '', unit_type: 'piece', buying_price: '', selling_price: '', stock_quantity: 0, low_stock_threshold: 5, pieces_per_unit: 1 }] } });
   const [units, setUnits] = useState([{ unit_label: '', unit_type: 'wholesale', buying_price: '', selling_price: '', stock_quantity: 0, low_stock_threshold: 5, pieces_per_unit: 1, parent_label: '' }]);
+  const [categories, setCategories] = useState(initialCategories);
+  const [newCat, setNewCat] = useState('');
+  const [catLoading, setCatLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+
+  const addCategory = async () => {
+    if (!newCat.trim()) return;
+    setCatLoading(true);
+    try {
+      await api.post('/products/categories', { name: newCat.trim() });
+      const r = await api.get('/products/categories/all');
+      setCategories(r.data.data);
+      setNewCat('');
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Failed to add category');
+    } finally {
+      setCatLoading(false);
+    }
+  };
+
+  const deleteCategory = async (id) => {
+    if (!window.confirm('Delete this category?')) return;
+    try {
+      await api.delete(`/products/categories/${id}`);
+      const r = await api.get('/products/categories/all');
+      setCategories(r.data.data);
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Failed to delete category');
+    }
+  };
 
   const addUnit = () => setUnits(prev => [...prev, { unit_label: '', unit_type: 'piece', buying_price: '', selling_price: '', stock_quantity: 0, low_stock_threshold: 5, pieces_per_unit: 1, parent_label: '' }]);
   const removeUnit = (i) => setUnits(prev => prev.filter((_, idx) => idx !== i));
@@ -108,10 +160,30 @@ function AddProductModal({ categories, onClose, onDone }) {
             </div>
             <div>
               <label className="label">Category</label>
-              <select className="input" {...register('category_id')}>
-                <option value="">— No category —</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select className="input flex-1" {...register('category_id')}>
+                  <option value="">— No category —</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-2 mt-1">
+                <input className="input text-sm flex-1" placeholder="New category..." value={newCat} onChange={e => setNewCat(e.target.value)} />
+                <button type="button" onClick={addCategory} disabled={catLoading || !newCat.trim()} className="btn-secondary text-sm px-3 whitespace-nowrap">
+                  {catLoading ? '...' : '+ Add'}
+                </button>
+              </div>
+              {categories.length > 0 && (
+                <div className="mt-2 border rounded-lg divide-y max-h-32 overflow-y-auto">
+                  {categories.map(c => (
+                    <div key={c.id} className="flex items-center justify-between px-3 py-1.5">
+                      <span className="text-xs text-gray-700">{c.name}</span>
+                      <button type="button" onClick={() => deleteCategory(c.id)} className="text-red-400 hover:text-red-600">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="label">Product Image</label>
@@ -253,6 +325,7 @@ function EditProductModal({ product, categories, onClose, onDone }) {
 }
 
 export default function Inventory() {
+  const { isAdmin } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -277,9 +350,11 @@ export default function Inventory() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Inventory</h1>
-        <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
-          <Plus size={16} /> Add Product
-        </button>
+        {isAdmin && (
+          <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
+            <Plus size={16} /> Add Product
+          </button>
+        )}
       </div>
 
       <div className="relative">
@@ -297,16 +372,16 @@ export default function Inventory() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Product</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Category</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Unit</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Buy</th>
+                {isAdmin && <th className="text-right px-4 py-3 font-medium text-gray-600">Buy</th>}
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Sell</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Stock</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="px-4 py-3"></th>
+                {isAdmin && <th className="px-4 py-3"></th>}
               </tr>
             </thead>
             <tbody className="divide-y">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">No products found</td></tr>
+                <tr><td colSpan={isAdmin ? 8 : 6} className="text-center py-12 text-gray-400">No products found</td></tr>
               )}
               {filtered.map(product =>
                 product.units.map((unit, ui) => (
@@ -320,9 +395,11 @@ export default function Inventory() {
                             <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center"><Package size={14} className="text-gray-400" /></div>
                           )}
                           <span>{product.name}</span>
-                          <button onClick={() => setEditProduct(product)} className="text-gray-400 hover:text-blue-500">
-                            <Pencil size={13} />
-                          </button>
+                          {isAdmin && (
+                            <button onClick={() => setEditProduct(product)} className="text-gray-400 hover:text-blue-500">
+                              <Pencil size={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -331,7 +408,7 @@ export default function Inventory() {
                       <span className="capitalize text-gray-700">{unit.unit_label}</span>
                       <span className="ml-1 text-xs text-gray-400">({unit.unit_type})</span>
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600">₱{parseFloat(unit.buying_price).toFixed(2)}</td>
+                    {isAdmin && <td className="px-4 py-3 text-right text-gray-600">₱{parseFloat(unit.buying_price).toFixed(2)}</td>}
                     <td className="px-4 py-3 text-right font-medium">₱{parseFloat(unit.selling_price).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={unit.stock_quantity <= 0 ? 'text-red-600 font-bold' : unit.stock_quantity <= unit.low_stock_threshold ? 'text-orange-500 font-bold' : 'text-gray-700'}>
@@ -341,14 +418,21 @@ export default function Inventory() {
                     <td className="px-4 py-3 text-center">
                       <StockBadge qty={unit.stock_quantity} threshold={unit.low_stock_threshold} />
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => setRestockUnit({ ...unit, productName: product.name })}
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
-                      >
-                        <RefreshCw size={12} /> Restock
-                      </button>
-                    </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => {
+                            const parentUnit = unit.parent_unit_id
+                              ? product.units.find(u => u.id === unit.parent_unit_id)
+                              : null;
+                            setRestockUnit({ ...unit, productName: product.name, parentUnit });
+                          }}
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
+                        >
+                          <RefreshCw size={12} /> Restock
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -361,6 +445,7 @@ export default function Inventory() {
         <RestockModal
           unit={restockUnit}
           productName={restockUnit.productName}
+          parentUnit={restockUnit.parentUnit}
           onClose={() => setRestockUnit(null)}
           onDone={load}
         />

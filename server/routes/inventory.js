@@ -21,6 +21,24 @@ router.post('/', async (req, res) => {
       'INSERT INTO stock_logs (product_unit_id, change_type, quantity_change, quantity_after, notes, logged_by) VALUES (?,?,?,?,?,?)',
       [product_unit_id, 'restock', quantity, newQty, notes || null, req.user.id]
     );
+
+    // If restocking a piece/pack that has a parent unit, deduct opened packs from the parent
+    if (unit.parent_unit_id) {
+      const [parents] = await conn.query('SELECT * FROM product_units WHERE id=?', [unit.parent_unit_id]);
+      if (parents.length) {
+        const parent = parents[0];
+        const piecesPerUnit = parseFloat(unit.pieces_per_unit) || 1;
+        const packsToOpen = Math.ceil(parseFloat(quantity) / piecesPerUnit);
+        if (parseFloat(parent.stock_quantity) < packsToOpen) throw new Error(`Not enough ${parent.unit_label} to open. Need ${packsToOpen}, have ${parent.stock_quantity}.`);
+        const newParentQty = parseFloat(parent.stock_quantity) - packsToOpen;
+        await conn.query('UPDATE product_units SET stock_quantity=? WHERE id=?', [newParentQty, parent.id]);
+        await conn.query(
+          'INSERT INTO stock_logs (product_unit_id, change_type, quantity_change, quantity_after, notes, logged_by) VALUES (?,?,?,?,?,?)',
+          [parent.id, 'adjustment', -packsToOpen, newParentQty, `Opened ${packsToOpen} ${parent.unit_label} to restock ${quantity} ${unit.unit_label}`, req.user.id]
+        );
+      }
+    }
+
     await conn.commit();
     res.json({ success: true, data: { new_stock: newQty } });
   } catch (err) {

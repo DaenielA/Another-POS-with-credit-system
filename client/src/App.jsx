@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import MemberLogin from './pages/MemberLogin';
+import MemberPortal from './pages/MemberPortal';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import Inventory from './pages/Inventory';
@@ -10,6 +12,7 @@ import MemberDetail from './pages/MemberDetail';
 import CreditRequests from './pages/CreditRequests';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Loans from './pages/Loans';
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, isAdmin } = useAuth();
@@ -23,14 +26,17 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/member-login" element={<MemberLogin />} />
+      <Route path="/member-portal" element={<MemberPortal />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
       <Route path="/pos" element={<ProtectedRoute><Layout><POS /></Layout></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><Layout><Inventory /></Layout></ProtectedRoute>} />
-      <Route path="/members" element={<ProtectedRoute><Layout><Members /></Layout></ProtectedRoute>} />
-      <Route path="/members/:id" element={<ProtectedRoute><Layout><MemberDetail /></Layout></ProtectedRoute>} />
+      <Route path="/members" element={<ProtectedRoute adminOnly><Layout><Members /></Layout></ProtectedRoute>} />
+      <Route path="/members/:id" element={<ProtectedRoute adminOnly><Layout><MemberDetail /></Layout></ProtectedRoute>} />
       <Route path="/credit-requests" element={<ProtectedRoute adminOnly><Layout><CreditRequests /></Layout></ProtectedRoute>} />
-      <Route path="/reports" element={<ProtectedRoute><Layout><Reports /></Layout></ProtectedRoute>} />
+      <Route path="/loans" element={<ProtectedRoute adminOnly><Layout><Loans /></Layout></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute adminOnly><Layout><Reports /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute adminOnly><Layout><Settings /></Layout></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

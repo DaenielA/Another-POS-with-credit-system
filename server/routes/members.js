@@ -102,4 +102,17 @@ router.get('/:id/payments', async (req, res) => {
   }
 });
 
+// Set member PIN (admin sets it for the member)
+router.post('/:id/set-pin', async (req, res) => {
+  const { pin } = req.body;
+  if (!pin || pin.length < 4) return res.status(400).json({ success: false, message: 'PIN must be at least 4 digits' });
+  try {
+    const hashed = await require('bcrypt').hash(pin, 10);
+    await pool.query('UPDATE members SET pin=? WHERE id=?', [hashed, req.params.id]);
+    res.json({ success: true, message: 'PIN set successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

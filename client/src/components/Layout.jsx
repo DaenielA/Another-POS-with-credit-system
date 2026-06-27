@@ -2,16 +2,17 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, ShoppingCart, Package, Users, CreditCard,
-  BarChart3, Settings, LogOut, Store, ClipboardList
+  BarChart3, Settings, LogOut, Store, ClipboardList, Banknote
 } from 'lucide-react';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/pos', icon: ShoppingCart, label: 'POS' },
   { to: '/inventory', icon: Package, label: 'Inventory' },
-  { to: '/members', icon: Users, label: 'Members' },
+  { to: '/members', icon: Users, label: 'Members', adminOnly: true },
+  { to: '/loans', icon: Banknote, label: 'Cash Loans', adminOnly: true },
   { to: '/credit-requests', icon: ClipboardList, label: 'Credit Requests', adminOnly: true },
-  { to: '/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/reports', icon: BarChart3, label: 'Reports', adminOnly: true },
   { to: '/settings', icon: Settings, label: 'Settings', adminOnly: true },
 ];
 

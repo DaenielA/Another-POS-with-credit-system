@@ -26,8 +26,8 @@ const getCreditAllowance = (member) => {
 };
 
 const getLimitRequestDecision = (score) => {
-  if (score >= 110) return 'auto_approve';
-  if (score >= 90) return 'review';
+  if (score >= 101) return 'auto_approve';
+  if (score >= 60) return 'review';
   return 'auto_reject';
 };
 

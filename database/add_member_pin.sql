@@ -1,0 +1,3 @@
+USE pos_system;
+
+ALTER TABLE members ADD COLUMN pin VARCHAR(255) DEFAULT NULL;

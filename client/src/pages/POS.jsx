@@ -95,6 +95,9 @@ function MemberModal({ onSelect, onClose }) {
 export default function POS() {
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState(null);
   const [cart, setCart] = useState([]);
   const [member, setMember] = useState(null);
   const [paymentType, setPaymentType] = useState('cash');
@@ -106,7 +109,13 @@ export default function POS() {
   const [error, setError] = useState('');
   const searchRef = useRef(null);
 
-  // Debounced product search
+  // Load all products and categories on mount
+  useEffect(() => {
+    api.get('/products').then(r => setAllProducts(r.data.data)).catch(() => {});
+    api.get('/products/categories/all').then(r => setCategories(r.data.data)).catch(() => {});
+  }, []);
+
+  // Debounced search
   useEffect(() => {
     if (!query.trim()) { setProducts([]); return; }
     const t = setTimeout(() => {
@@ -114,6 +123,11 @@ export default function POS() {
     }, 300);
     return () => clearTimeout(t);
   }, [query]);
+
+  const baseProducts = query.trim() ? products : allProducts;
+  const displayedProducts = activeCategory
+    ? baseProducts.filter(p => p.category === activeCategory)
+    : baseProducts;
 
   const subtotal = cart.reduce((sum, i) => sum + i.subtotal, 0);
   const discountVal = parseFloat(discount) || 0;
@@ -143,6 +157,12 @@ export default function POS() {
     setProducts([]);
     searchRef.current?.focus();
   }, []);
+
+  const handleCategoryClick = (cat) => {
+    setActiveCategory(prev => prev === cat ? null : cat);
+    setQuery('');
+    setProducts([]);
+  };
 
   const updateQty = (unit_id, delta) => {
     setCart(prev => prev.map(i => {
@@ -198,14 +218,14 @@ export default function POS() {
     <div className="flex gap-4 h-[calc(100vh-3rem)]">
       {/* Left: Product Search */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="relative mb-4">
+        <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
             ref={searchRef}
             className="input pl-10 text-base"
             placeholder="Search products..."
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { setQuery(e.target.value); setActiveCategory(null); }}
             autoFocus
           />
           {query && (
@@ -215,45 +235,84 @@ export default function POS() {
           )}
         </div>
 
-        {/* Search Results */}
-        {products.length > 0 && (
-          <div className="bg-white rounded-xl shadow-lg border overflow-y-auto flex-1">
-            {products.map(product => (
-              <div key={product.id} className="border-b last:border-0 p-3">
-                <p className="font-semibold text-sm text-gray-800 mb-2">{product.name}</p>
-                <div className="flex flex-wrap gap-2">
-                  {product.units.map(unit => (
-                    <button
-                      key={unit.id}
-                      onClick={() => addToCart(product, unit)}
-                      disabled={unit.stock_quantity <= 0}
-                      className="flex flex-col items-start px-3 py-2 rounded-lg border-2 border-blue-100 bg-blue-50 hover:border-blue-500 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-w-24"
-                    >
-                      <span className="text-xs font-medium text-blue-700">{unit.unit_label}</span>
-                      <span className="text-sm font-bold text-gray-900">₱{parseFloat(unit.selling_price).toFixed(2)}</span>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-xs text-gray-400">Stock: {unit.stock_quantity}</span>
-                        {getStockBadge(unit)}
-                      </div>
-                    </button>
-                  ))}
+        {/* Category Tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+          <button
+            onClick={() => { setActiveCategory(null); setQuery(''); setProducts([]); }}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              !activeCategory ? 'bg-blue-600 text-white' : 'bg-white border text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            All Products
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => handleCategoryClick(cat.name)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                activeCategory === cat.name ? 'bg-blue-600 text-white' : 'bg-white border text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Product List */}
+        {displayedProducts.length > 0 && (
+          <div className="overflow-y-auto flex-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {displayedProducts.map(product => (
+                <div key={product.id} className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                  {/* Product Image */}
+                  <div className="w-full h-28 bg-gray-100 flex items-center justify-center overflow-hidden">
+                    {product.image_url ? (
+                      <img
+                        src={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${product.image_url}`}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <ShoppingBag size={32} className="text-gray-300" />
+                    )}
+                  </div>
+                  {/* Product Info + Units */}
+                  <div className="p-2">
+                    <p className="font-semibold text-xs text-gray-800 mb-2 truncate">{product.name}</p>
+                    <div className="flex flex-col gap-1">
+                      {product.units.map(unit => (
+                        <button
+                          key={unit.id}
+                          onClick={() => addToCart(product, unit)}
+                          disabled={unit.stock_quantity <= 0}
+                          className="w-full flex justify-between items-center px-2 py-1.5 rounded-lg border-2 border-blue-100 bg-blue-50 hover:border-blue-500 hover:bg-blue-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <div className="text-left">
+                            <p className="text-xs font-medium text-blue-700">{unit.unit_label}</p>
+                            {getStockBadge(unit)}
+                          </div>
+                          <p className="text-xs font-bold text-gray-900">₱{parseFloat(unit.selling_price).toFixed(2)}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
-        {!products.length && query.length > 0 && (
+        {query.length > 0 && displayedProducts.length === 0 && (
           <div className="text-center text-gray-400 py-12 bg-white rounded-xl">
             <ShoppingBag size={40} className="mx-auto mb-2 opacity-30" />
             <p>No products found for "{query}"</p>
           </div>
         )}
 
-        {!query && (
+        {!query && allProducts.length === 0 && (
           <div className="text-center text-gray-300 py-16 flex flex-col items-center">
             <Search size={48} className="mb-3" />
-            <p className="text-lg">Search for products to add to cart</p>
+            <p className="text-lg">Loading products...</p>
           </div>
         )}
       </div>

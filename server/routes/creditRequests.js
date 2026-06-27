@@ -20,13 +20,7 @@ router.post('/', async (req, res) => {
 
     const decision = getLimitRequestDecision(parseFloat(members[0].credit_score));
     let status = 'pending';
-
-    if (decision === 'auto_approve') {
-      status = 'approved';
-      await pool.query('UPDATE members SET current_credit_limit=? WHERE id=?', [requested_limit, member_id]);
-    } else if (decision === 'auto_reject') {
-      status = 'rejected';
-    }
+    if (decision === 'auto_reject') status = 'rejected';
 
     const [r] = await pool.query(
       'INSERT INTO credit_limit_requests (member_id, requested_limit, reason, status) VALUES (?,?,?,?)',
